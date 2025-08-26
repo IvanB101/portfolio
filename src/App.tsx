@@ -58,6 +58,12 @@ async function setupWebGPU() {
     };
 
     const ubo: Uniform = {
+        display: {
+            max_width: window.screen.width,
+            max_height: window.screen.height,
+            width: canvas.width,
+            height: canvas.height,
+        },
         viewer: {
             pos: [0, 0, 3],
             forward: [0, 0, -1],
@@ -67,7 +73,6 @@ async function setupWebGPU() {
             fov: Math.PI / 2,
             near: 0.1,
             far: 20,
-            aspect: canvas.height / canvas.width,
         }
     };
 
@@ -85,7 +90,8 @@ async function setupWebGPU() {
     });
 
     function render() {
-        ubo.camera.aspect = canvas.width / canvas.height;
+        ubo.display.width = canvas.width;
+        ubo.display.height = canvas.height;
         uboArr = parse(ubo);
         device.queue.writeBuffer(uniformBuffer, 0, uboArr);
 
