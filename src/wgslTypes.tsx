@@ -1,3 +1,5 @@
+import { off } from "process";
+
 export type vec3f = [number, number, number];
 // type vec4f = [number, number, number, number];
 
@@ -21,26 +23,35 @@ export interface Camera {
 };
 
 export interface Uniform {
+    time: number
     display: Display,
     viewer: Viewer,
     camera: Camera,
 };
 
 export function parse(ubo: Uniform): Float32Array {
-    let floatArr = new Float32Array(4
+    let floatArr = new Float32Array(4 * 4
+        + 4
         + 4 * 3
         + 3
         + 1 // padding
     );
     let uintArr = new Uint32Array(floatArr.buffer);
+    var offset = 0;
 
-    uintArr.set([ubo.display.max_width, ubo.display.max_height, ubo.display.width, ubo.display.height], 0);
+    uintArr.set([ubo.time, 0, 0, 0], offset);
+    offset += 4;
+    uintArr.set([ubo.display.max_width, ubo.display.max_height, ubo.display.width, ubo.display.height], offset);
+    offset += 4;
 
-    floatArr.set(ubo.viewer.pos, 4);
-    floatArr.set(ubo.viewer.forward, 8);
-    floatArr.set(ubo.viewer.up, 12);
+    floatArr.set(ubo.viewer.pos, offset);
+    offset += 4;
+    floatArr.set(ubo.viewer.forward, offset);
+    offset += 4;
+    floatArr.set(ubo.viewer.up, offset);
+    offset += 4;
 
-    floatArr.set([ubo.camera.fov, ubo.camera.near, ubo.camera.far], 16);
+    floatArr.set([ubo.camera.fov, ubo.camera.near, ubo.camera.far], offset);
 
     return floatArr;
 }

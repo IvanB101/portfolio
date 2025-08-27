@@ -2,7 +2,6 @@ import simpleShaders from "../shaders/simple.wgsl?raw"
 import { parse, type Uniform } from './wgslTypes';
 
 export interface WebGLContext {
-    render: () => void,
     ubo: Uniform,
 }
 
@@ -62,6 +61,7 @@ export async function initWebGL(): Promise<WebGLContext> {
     };
 
     const ubo: Uniform = {
+        time: Date.now(),
         display: {
             max_width: window.screen.width,
             max_height: window.screen.height,
@@ -69,8 +69,8 @@ export async function initWebGL(): Promise<WebGLContext> {
             height: canvas.height,
         },
         viewer: {
-            pos: [0, 0, 3],
-            forward: [0, 0, -1],
+            pos: [3, 5, 3],
+            forward: [-1, -2, -1],
             up: [0, 1, 0],
         },
         camera: {
@@ -94,6 +94,7 @@ export async function initWebGL(): Promise<WebGLContext> {
     });
 
     function render() {
+        ubo.time = performance.now();
         ubo.display.width = canvas.width;
         ubo.display.height = canvas.height;
         uboArr = parse(ubo);
@@ -125,8 +126,13 @@ export async function initWebGL(): Promise<WebGLContext> {
     });
     observer.observe(canvas);
 
+    (function loop() {
+        render();
+        requestAnimationFrame(() => loop());
+    })()
+    // render();
+
     return {
-        render: render,
         ubo: ubo,
     }
 }
