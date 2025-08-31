@@ -1,4 +1,5 @@
 const PI = 3.1415926536;
+const EPSILON: f32 = 0.01;
 
 struct VertOut {
     @builtin(position) pos: vec4f,
@@ -14,11 +15,6 @@ struct Display {
 
 struct Material {
     color: vec4f,
-}
-
-struct Intersec {
-    depth: f32,
-    id_material: u32,
 }
 
 struct Viewer {
@@ -96,26 +92,9 @@ fn vs(
     return out;
 }
 
-fn unionSDF(i1: Intersec, i2: Intersec) -> Intersec {
-    if i1.depth < i2.depth {
-        return i1;
-    } else {
-        return i2;
-    }
-}
-
-fn intersecSDF(i1: Intersec, i2: Intersec, use_second_material: bool) -> Intersec {
-    return Intersec(
-        select(i1.depth, i2.depth, i1.depth < i2.depth),
-        select(i1.id_material, i2.id_material, use_second_material),
-    );
-}
-
-fn subtractSDF(i1: Intersec, i2: Intersec, tint: bool) -> Intersec {
-    return Intersec(
-        select(i1.depth, -i2.depth, i1.depth < -i2.depth),
-        select(i1.id_material, i2.id_material, i1.depth < -i2.depth && tint),
-    );
+fn smax(a: f32, b: f32, k: f32) -> f32 {
+    let h = max(k - abs(a - b), 0);
+    return max(a, b) + (0.25 / k) * h * h;
 }
 
 fn sphereSDF(p: vec3f, r: f32) -> f32 {
@@ -126,65 +105,99 @@ fn boxSDF(p: vec3f, r: vec3f) -> f32 {
     return length(max(abs(p) - r, vec3f(0)));
 }
 
-fn sceneSDF(in_p: vec3f) -> Intersec {
+fn map(p: vec3f) -> vec3f {
     let alpha = f32(ubo.time) / 1000 / 10 * 2 * PI;
-    let temp = mat2x2(cos(alpha), -sin(alpha), sin(alpha), cos(alpha)) * in_p.xz;
-    let p = vec3f(temp.x, in_p.y, temp.y);
-    // let p = in_p;
-
-    return Intersec(boxSDF(p, vec3f(0.5, 0.5, 0.5)) - 0.3, 0);
-    // return unionSDF(
-    //     Intersec(sphereSDF(p + vec3f(0.5, 0, 0), 1), 0),
-    //     Intersec(sphereSDF(p + vec3f(-0.5, 0, 0), 1), 1),
-    // );
+    let temp = mat2x2(cos(alpha), -sin(alpha), sin(alpha), cos(alpha)) * p.xz;
+    return vec3f(temp.x, p.y, temp.y);
 }
 
-fn aproxGrad(p: vec3f) -> vec3f {
-    let delta = 0.0001;
+fn sceneSDF(in_p: vec3f) -> vec2f {
+    let p = map(in_p);
+    var dist = vec2f(0);
 
-    return normalize(vec3f(
-        sceneSDF(vec3f(p.x + delta, p.y, p.z)).depth - sceneSDF(vec3f(p.x - delta, p.y, p.z)).depth,
-        sceneSDF(vec3f(p.x, p.y + delta, p.z)).depth - sceneSDF(vec3f(p.x, p.y - delta, p.z)).depth,
-        sceneSDF(vec3f(p.x, p.y, p.z + delta)).depth - sceneSDF(vec3f(p.x, p.y, p.z - delta)).depth
-    ));
+        {
+        let alpha = p.y * PI;
+        let temp = mat2x2(cos(alpha), -sin(alpha), sin(alpha), cos(alpha)) * p.xz;
+        let tp = vec3f(temp.x, p.y, temp.y);
+        // let tp = p + vec3f(p.y, 0, 0);
+        // let disp = vec3f(sin(20 * p.x), sin(20 * p.y), sin(20 * p.z));
+        // let tp = p + vec3f(1, 1, 0);
+        dist = vec2f(boxSDF(tp, vec3f(0.5, 1.5, 0.5)) - 0.00, 0);
+    }
+
+    let plane = p.y + 1;
+    dist = select(vec2f(plane, 1), dist, plane > dist.x);
+
+    return dist;
+}
+
+fn calcNormal(p: vec3f) -> vec3f {
+    let eps = 0.0001;
+
+    let k1 = vec3(1.0, -1.0, -1.0);
+    let k2 = vec3(-1.0, -1.0, 1.0);
+    let k3 = vec3(-1.0, 1.0, -1.0);
+    let k4 = vec3(1.0, 1.0, 1.0);
+
+    return normalize(
+        k1 * sceneSDF(p + eps * k1).x + k2 * sceneSDF(p + eps * k2).x + k3 * sceneSDF(p + eps * k3).x + k4 * sceneSDF(p + eps * k4).x
+    );
 }
 
 const MAX_MARCHING_STEPS: u32 = 100;
-const EPSILON: f32 = 0.01;
 
 const MATERIALS = array<Material, 2>(
     Material(vec4f(1, 0, 0, 1)),
     Material(vec4f(0, 1, 0, 1)),
 );
 
+fn intersec(pos: vec3f, dir: vec3f, initial_depth: f32) -> f32 {
+    let depth_factor = 0.5;
+    var depth = initial_depth;
+    for (var i: u32 = 0; i < MAX_MARCHING_STEPS; i++) {
+        let dist = sceneSDF(pos + dir * depth).x;
+        if dist < 0 {
+            depth += dist * depth_factor;
+            continue;
+        }
+        if dist < EPSILON {
+            return depth;
+        }
+        depth += dist * depth_factor;
+        if depth >= ubo.camera.far {
+            return -1;
+        }
+    }
+    return -1;
+}
+
 @fragment 
 fn fs(in: VertOut) -> @location(0) vec4f {
     let dir = normalize(in.dir);
-    // TODO: control not starting inside a volume
-    var depth = ubo.camera.near;
-    for (var i: u32 = 0; i < MAX_MARCHING_STEPS; i++) {
-        let dist = sceneSDF(ubo.viewer.pos + dir * depth).depth;
-        if dist < EPSILON {
-            break;
-        }
-        depth += dist;
-        if depth >= ubo.camera.far {
-            break;
-        }
+    let depth = intersec(ubo.viewer.pos, dir, ubo.camera.near);
+    if depth == -1 {
+        return vec4f(0, 0, 0, 1);
     }
-    if depth >= ubo.camera.far {
-        return vec4f(0.0, 0.0, 0.0, 1.0);
-    }
-    let gradient = aproxGrad(ubo.viewer.pos + dir * depth);
+    let intersection = ubo.viewer.pos + dir * depth;
+    let normal = calcNormal(intersection);
 
-    let material = MATERIALS[sceneSDF(ubo.viewer.pos + dir * depth).id_material];
+    let material = MATERIALS[u32(sceneSDF(ubo.viewer.pos + dir * depth).y)];
     let color = material.color;
 
-    let dir_light = DirectionalLight(vec4f(1, 1, 1, 0.5), normalize(vec3f(-1, -1, 0)));
     let amb_light = AmbientLight(vec4f(1, 1, 1, 0.05));
-
-    var diffuse = dir_light.color.xyz * dir_light.color.w * max(-dot(dir_light.dir, gradient), 0);
-    diffuse += amb_light.color.xyz * amb_light.color.w;
+    var diffuse = amb_light.color.xyz * amb_light.color.w;
+        {
+        let l_dir = normalize(vec3f(-1, -1, 0));
+        let l_pos = intersection - l_dir * 10;
+        let light = DirectionalLight(vec4f(1, 1, 1, 0.5), l_dir);
+        // diffuse += light.color.xyz * light.color.w * max(-dot(light.dir, normal), 0);
+        let l_proj = l_pos + l_dir * intersec(l_pos, l_dir, 0);
+        let diff = abs(intersection - l_proj);
+        diffuse += select(
+            vec3f(0), light.color.xyz * light.color.w * max(-dot(light.dir, normal), 0), dot(diff, diff) < 0.001
+        );
+    }
 
     return vec4f(color.xyz * diffuse, 1);
+    // return vec4f((normal + vec3f(1)) / 2, 1);
 }
