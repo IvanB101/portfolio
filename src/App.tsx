@@ -1,9 +1,11 @@
-import { use, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { initWebGL, type WebGLContext } from './webgl';
+import { cellular, type Cellular } from './cellular';
 
 function App() {
     const initialized = useRef(false);
-    const webGLContext = useRef<WebGLContext>(null);
+    const wgpu = useRef<WebGLContext>(null);
+    const surface = useRef<Cellular>(null);
 
     useEffect(() => {
         if (initialized.current) {
@@ -11,7 +13,16 @@ function App() {
         }
         initWebGL()
             .then(context => {
-                webGLContext.current = context;
+                wgpu.current = context;
+                const canvas = document.getElementById('main-canvas') as HTMLCanvasElement;
+                surface.current = cellular(context, canvas);
+                surface.current.render();
+
+                // (function loop() {
+                //     surface.current.render();
+                //     requestAnimationFrame(() => loop());
+                // })()
+
             })
             .catch(e => {
                 alert(e) // TODO: provide alternative
