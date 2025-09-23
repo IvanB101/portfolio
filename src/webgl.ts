@@ -23,4 +23,8 @@ async function initWebGL(): Promise<WebGLContext> {
     return { device, adapter }
 }
 
+interface ComputePipeline {
+
+}
+
 export { type WebGLContext, initWebGL }

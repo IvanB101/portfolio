@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { initWebGL, type WebGLContext } from './webgl';
-import { cellular, type Cellular } from './cellular';
+import { world, type World } from './world';
 
 function App() {
     const initialized = useRef(false);
     const wgpu = useRef<WebGLContext>(null);
-    const surface = useRef<Cellular>(null);
+    const surface = useRef<World>(null);
 
     useEffect(() => {
         if (initialized.current) {
@@ -15,13 +15,13 @@ function App() {
             .then(context => {
                 wgpu.current = context;
                 const canvas = document.getElementById('main-canvas') as HTMLCanvasElement;
-                surface.current = cellular(context, canvas);
+                surface.current = world(context, canvas, 2);
                 surface.current.render();
 
-                // (function loop() {
-                //     surface.current.render();
-                //     requestAnimationFrame(() => loop());
-                // })()
+                (function loop() {
+                    surface.current.render();
+                    requestAnimationFrame(() => loop());
+                })()
 
             })
             .catch(e => {
