@@ -15,7 +15,7 @@ function App() {
             .then(context => {
                 wgpu.current = context;
                 const canvas = document.getElementById('main-canvas') as HTMLCanvasElement;
-                surface.current = world(context, canvas, 2);
+                surface.current = world(context, canvas, 100);
                 surface.current.render();
 
                 (function loop() {

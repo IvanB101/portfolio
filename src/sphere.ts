@@ -62,7 +62,7 @@ export function sphere(wgpu: WebGLContext): SphereCompute {
         });
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(vbuffer.size / (8 * 4));
+        pass.dispatchWorkgroups(Math.ceil(nVertices / 64));
         pass.end();
 
         // const mapped = device.createBuffer({
@@ -111,7 +111,7 @@ export function sphere(wgpu: WebGLContext): SphereCompute {
         });
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(ibuffer.size / (8 * 4));
+        pass.dispatchWorkgroups(Math.ceil(nIndices / 64));
         pass.end();
 
         // const mapped = device.createBuffer({

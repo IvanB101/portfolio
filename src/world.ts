@@ -4,6 +4,7 @@ import type { WebGLContext } from './webgl';
 import { sphere } from "./sphere";
 import { PerspectiveCamera } from "./camera";
 import { Mat, Transform3D } from "./math";
+import { deform } from "./deform";
 
 const defs = makeShaderDataDefinitions(shaders);
 const uniform = makeStructuredView(defs.uniforms.ubo);
@@ -51,6 +52,11 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
             cullMode: "back",
             frontFace: "ccw",
         },
+        depthStencil: {
+            depthWriteEnabled: true,
+            depthCompare: 'less',
+            format: 'depth24plus',
+        },
     });
 
     const renderPassDescriptor: GPURenderPassDescriptor = {
@@ -61,6 +67,12 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
             loadOp: 'clear',
             storeOp: 'store',
         }],
+        depthStencilAttachment: {
+            view: context.getCurrentTexture().createView(),
+            depthClearValue: 1.0,
+            depthLoadOp: 'clear',
+            depthStoreOp: 'store',
+        },
     };
 
     const uniformBuffer = device.createBuffer({
@@ -75,7 +87,12 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
         ],
     });
 
-    const { vbuffer, ibuffer, nIndices } = sphere(wgpu).compute(n);
+    const { vbuffer, ibuffer, nIndices, nVertices } = sphere(wgpu).compute(n);
+    const deformedVertices = deform(wgpu).compute(nVertices, vbuffer, {
+        nLayers: 4,
+        magnitude: 0.8,
+        compression: 2
+    });
 
     const cam = new PerspectiveCamera({
         pos: [0, 0, -2],
@@ -85,8 +102,12 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
 
     let transform = new Transform3D({ position: [0, 0, 1] });
 
+    let depthTexture: GPUTexture;
+
     function render() {
-        let angle = performance.now() / 1000 / 10 * 2 * Math.PI;
+        const target = context.getCurrentTexture();
+        const period = 50;
+        let angle = performance.now() / 1000 / period * 2 * Math.PI;
         transform.rotation[1] = angle;
 
         cam.aspect = canvas.width / canvas.height;
@@ -100,15 +121,28 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
         });
 
         device.queue.writeBuffer(uniformBuffer, 0, uniform.arrayBuffer);
+        if (!depthTexture ||
+            depthTexture.width !== target.width ||
+            depthTexture.height !== target.height) {
+            if (depthTexture) {
+                depthTexture.destroy();
+            }
+            depthTexture = device.createTexture({
+                size: [target.width, target.height],
+                format: 'depth24plus',
+                usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            });
+        }
 
-        (renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[])[0].view = context.getCurrentTexture().createView();
+        (renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[])[0].view = target.createView();
+        (renderPassDescriptor.depthStencilAttachment as GPURenderPassDepthStencilAttachment).view = depthTexture.createView();
 
         const encoder = device.createCommandEncoder({ label: 'main encoder' });
 
         const pass = encoder.beginRenderPass(renderPassDescriptor);
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
-        pass.setVertexBuffer(0, vbuffer);
+        pass.setVertexBuffer(0, deformedVertices);
         pass.setIndexBuffer(ibuffer, 'uint32');
         pass.drawIndexed(nIndices);
         pass.end();
