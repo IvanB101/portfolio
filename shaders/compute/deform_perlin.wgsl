@@ -126,11 +126,11 @@ fn main(@builtin(global_invocation_id) inID: vec3u) {
     let pos = inpos + inpos * fbm(samplePos);
 
     let eps = 0.0001;
-    let k1 = vec3(eps, -eps, -eps);
-    let k2 = vec3(-eps, -eps, eps);
-    let k3 = vec3(-eps, eps, -eps);
-    let k4 = vec3(eps, eps, eps);
-    let grad = k1 * fbm(samplePos + k1) + k2 * fbm(samplePos + k2) + k3 * fbm(samplePos + k3) + k4 * fbm(samplePos + k4);
+    let grad = vec3f(
+        (fbm(samplePos + vec3f(eps, 0, 0)) - fbm(samplePos + vec3f(-eps, 0, 0))) / (eps * 2),
+        (fbm(samplePos + vec3f(0, eps, 0)) - fbm(samplePos + vec3f(0, -eps, 0))) / (eps * 2),
+        (fbm(samplePos + vec3f(0, 0, eps)) - fbm(samplePos + vec3f(0, 0, -eps))) / (eps * 2),
+    );
     let normal = normalize(innormal - grad);
 
     outbuff[id * 6] = pos.x;
