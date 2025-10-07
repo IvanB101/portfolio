@@ -96,12 +96,15 @@ fn fbm(p: vec3f) -> f32 {
     var val = 0.0;
     var sum = 0.0;
 
-    let n_layers = 4u;
-    for (var i = 0u; i < n_layers; i++) {
+    for (var i = 0u; i < ubo.nLayers; i++) {
         let factor = f32(1u << i);
         let weight = 1.0 / factor;
 
         val += perlin(p * factor) * weight;
+        // TODO: fix normals
+        // let sample = perlin(p * factor);
+        // let noise = 1 - pow(abs(sample * 2 - 1), 1/1.5);
+        // val += noise * weight;
         sum += weight;
     }
 

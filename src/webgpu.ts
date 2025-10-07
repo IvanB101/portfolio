@@ -1,9 +1,9 @@
-interface WebGLContext {
+export interface WebGPUContext {
     device: GPUDevice,
     adapter: GPUAdapter,
 }
 
-async function initWebGL(): Promise<WebGLContext> {
+export async function initWebGPU(): Promise<WebGPUContext> {
     if (!navigator.gpu) {
         throw Error("WebGPU not supported on this browser.");
     }
@@ -22,9 +22,3 @@ async function initWebGL(): Promise<WebGLContext> {
 
     return { device, adapter }
 }
-
-interface ComputePipeline {
-
-}
-
-export { type WebGLContext, initWebGL }

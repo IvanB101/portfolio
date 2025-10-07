@@ -3,7 +3,7 @@ import shaders from "../shaders/general.wgsl?raw"
 import type { WebGLContext } from './webgl';
 import { sphere } from "./sphere";
 import { PerspectiveCamera } from "./camera";
-import { Mat, Transform3D } from "./math";
+import { Transform3D } from "./math";
 import { deform } from "./deform";
 
 const defs = makeShaderDataDefinitions(shaders);
@@ -48,9 +48,7 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
             targets: [{ format: presentationFormat }],
         },
         primitive: {
-            // topology: "triangle-list",
             cullMode: "back",
-            frontFace: "ccw",
         },
         depthStencil: {
             depthWriteEnabled: true,
@@ -90,8 +88,8 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
     const { vbuffer, ibuffer, nIndices, nVertices } = sphere(wgpu).compute(n);
     const deformedVertices = deform(wgpu).compute(nVertices, vbuffer, {
         nLayers: 4,
-        magnitude: 0.8,
-        compression: 2
+        magnitude: 1.4,
+        compression: 1
     });
 
     const cam = new PerspectiveCamera({
@@ -100,7 +98,9 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
         up: [0, 1, 0],
     });
 
-    let transform = new Transform3D({ position: [0, 0, 1] });
+    const transform = new Transform3D({
+        position: [0, 0, 1]
+    });
 
     let depthTexture: GPUTexture;
 
@@ -119,8 +119,8 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
             N: transform.getNormalMat(),
             t: performance.now(),
         });
-
         device.queue.writeBuffer(uniformBuffer, 0, uniform.arrayBuffer);
+
         if (!depthTexture ||
             depthTexture.width !== target.width ||
             depthTexture.height !== target.height) {
@@ -132,14 +132,13 @@ export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number):
                 format: 'depth24plus',
                 usage: GPUTextureUsage.RENDER_ATTACHMENT,
             });
+            (renderPassDescriptor.depthStencilAttachment as GPURenderPassDepthStencilAttachment).view = depthTexture.createView();
         }
-
         (renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[])[0].view = target.createView();
-        (renderPassDescriptor.depthStencilAttachment as GPURenderPassDepthStencilAttachment).view = depthTexture.createView();
 
         const encoder = device.createCommandEncoder({ label: 'main encoder' });
-
         const pass = encoder.beginRenderPass(renderPassDescriptor);
+
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
         pass.setVertexBuffer(0, deformedVertices);

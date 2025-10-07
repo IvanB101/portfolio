@@ -1,38 +1,35 @@
-import { useEffect, useRef } from 'react'
-import { initWebGL, type WebGLContext } from './webgl';
-import { world, type World } from './world';
+import { initWebGPU } from './webgpu';
+import { slime, type Slime } from './slime';
+import { useRef } from 'react';
 
 function App() {
     const initialized = useRef(false);
-    const wgpu = useRef<WebGLContext>(null);
-    const surface = useRef<World>(null);
 
-    useEffect(() => {
-        if (initialized.current) {
-            return;
-        }
-        initWebGL()
-            .then(context => {
-                wgpu.current = context;
-                const canvas = document.getElementById('main-canvas') as HTMLCanvasElement;
-                surface.current = world(context, canvas, 100);
-                surface.current.render();
+    const setCanvasRef = (canvas: HTMLCanvasElement) => {
+        if (!canvas || initialized.current) { return; }
 
-                (function loop() {
-                    surface.current.render();
-                    requestAnimationFrame(() => loop());
-                })()
-
-            })
-            .catch(e => {
-                alert(e) // TODO: provide alternative
-            })
         initialized.current = true;
-    }, [])
+        canvas.width = 800;
+        canvas.height = 600;
+        initWebGPU().then(context => {
+            // surface.current = cellular(context, canvas);
+            // surface.current = world(context, canvas, 100);
+            const surface = slime(context, canvas, {});
+
+            (function loop() {
+                surface.update();
+                surface.render();
+                requestAnimationFrame(() => loop());
+            })()
+        }).catch(e => {
+            alert(e);
+        })
+    }
+
 
     return (
         <div className="w-screen h-screen p-0 m-0">
-            <canvas id='main-canvas' className='w-full h-full'></canvas>
+            <canvas ref={setCanvasRef} className='w-[800px] h-[600px]'></canvas>
         </div>
     )
 }

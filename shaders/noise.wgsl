@@ -237,6 +237,22 @@ fn turbulence3(p: vec2f) -> f32 {
     return fbm(p + 4 * s);
 }
 
+fn ridge(p: vec2f) -> f32 {
+    let denorm = 2 * perlin(p) - 1;
+    let ridge = abs(denorm);
+    return 1 - pow(ridge, 1.0 / 10.0);
+}
+
+fn sinTurbulence(p: vec2f) -> f32 {
+    let q = vec2f(
+        fbm(p + vec2f(0)),
+        fbm(p + vec2f(5.2, 1.3))
+    );
+    let r = fbm(q);
+
+    return (sin(p.x) + q.x + r) / 3;
+}
+ 
 @fragment 
 fn fs(in: VertOut) -> @location(0) vec4f {
     // let uv = in.uv + f32(ubo.time) / 2000;
@@ -246,6 +262,8 @@ fn fs(in: VertOut) -> @location(0) vec4f {
     // return vec4f(vec3f(1 - cellularManhatam(uv)), 1);
     // return vec4f(vec3f(perlin(uv * 5 + vec2f(1))), 1);
     // return vec4f(vec3f(fbm(uv * 10 + vec2f(1))), 1);
-    return vec4f(vec3f(turbulence3(uv * 20 + vec2f(1))), 1);
+    // return vec4f(vec3f(turbulence3(uv * 20 + vec2f(1))), 1);
     // return vec4f(vec3f(cellWalls(uv)), 1);
+    // return vec4f(vec3f(ridge(uv * 5 + vec2f(1))), 1);
+    return vec4f(vec3f(sinTurbulence(uv * 20 + vec2f(1))), 1);
 }
