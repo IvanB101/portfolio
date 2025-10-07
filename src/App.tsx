@@ -1,5 +1,5 @@
 import { initWebGPU } from './webgpu';
-import { slime, type Slime } from './slime';
+import { slime } from './slime';
 import { useRef } from 'react';
 
 function App() {

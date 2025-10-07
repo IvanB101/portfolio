@@ -102,13 +102,11 @@ fn idx(cords: vec2u) -> u32 {
     return cords.x + cords.y * config.size.x;
 }
 
-fn rot(angle: f32) -> mat2x2<f32> {
-    let s = sin(angle);
-    let c = cos(angle);
-
-    return mat2x2(
-        c, -s,
-        s, c
+fn wrap(cords: vec2f) -> vec2f {
+    let dims = vec2f(config.size);
+    return vec2f(
+        cords.x - select(0., dims.x, cords.x > dims.x) + select(0., dims.x, cords.x < 0.),
+        cords.y - select(0., dims.y, cords.y > dims.y) + select(0., dims.y, cords.y < 0.)
     );
 }
 
@@ -123,14 +121,14 @@ fn updateAgents(@builtin(global_invocation_id) iid: vec3u) {
     var angle = agents[iid.x].angle;
     var pos = agents[iid.x].pos;
 
-    let cords = vec2i(pos);
-    // _ = medium1[0];
-    let leftCords = vec2i(pos + vec2f(cos(angle + config.sensoryAngle), sin(angle + config.sensoryAngle)) * config.sensoryOffset);
-    var left = select(medium1[idx(vec2u(leftCords))], -1., u32(leftCords.x) > config.size.x || u32(leftCords.y) > config.size.y);
-    let frontCords = vec2i(pos + vec2f(cos(angle), sin(angle)) * config.sensoryOffset);
-    var front = select(medium1[idx(vec2u(frontCords))], -1., u32(frontCords.x) > config.size.x || u32(frontCords.y) > config.size.y);
-    let rightCords = vec2i(pos + vec2f(cos(angle - config.sensoryAngle), sin(angle - config.sensoryAngle)) * config.sensoryOffset);
-    var right = select(medium1[idx(vec2u(rightCords))], -1., u32(rightCords.x) > config.size.x || u32(rightCords.y) > config.size.y);
+    let angleLeft = angle + config.sensoryAngle;
+    let leftCords = vec2i(wrap(pos + vec2f(cos(angleLeft), sin(angleLeft)) * config.sensoryOffset));
+    let left = medium1[idx(vec2u(leftCords))];
+    let frontCords = vec2i(wrap(pos + vec2f(cos(angle), sin(angle)) * config.sensoryOffset));
+    var front = medium1[idx(vec2u(frontCords))];
+    let angleRight = angle - config.sensoryAngle;
+    let rightCords = vec2i(wrap(pos + vec2f(cos(angleRight), sin(angleRight)) * config.sensoryOffset));
+    var right = medium1[idx(vec2u(rightCords))];
 
     var delta = 0.;
     if front >= max(left, right) {
@@ -149,17 +147,7 @@ fn updateAgents(@builtin(global_invocation_id) iid: vec3u) {
         angle -= 2. * PI;
     }
 
-    let newPos = pos + vec2f(cos(angle), sin(angle));
-    if newPos.x <= 0. || u32(ceil(newPos.x)) >= config.size.x || newPos.y <= 0. || u32(ceil(newPos.y)) >= config.size.y {
-        angle = random(iid.x + config.time) * 2. * PI;
-    }
-    // if newPos.x <= 0. || u32(ceil(newPos.x)) >= config.size.x {
-    //     angle = PI - angle;
-    // }
-    // if newPos.y <= 0. || u32(ceil(newPos.y)) >= config.size.y {
-    //     angle = -angle;
-    // }
-    pos = clamp(newPos, vec2f(0.), vec2f(config.size));
+    pos = wrap(pos + vec2f(cos(angle), sin(angle)));
 
     agents[iid.x] = Agent(pos, angle);
 }
@@ -180,19 +168,17 @@ fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
     if iid.x >= config.size.x * config.size.y {
         return;
     }
-    let cords = vec2i(
-        i32(iid.x % config.size.x),
-        i32(iid.x / config.size.x)
+    let cords = vec2f(
+        f32(i32(iid.x % config.size.x)),
+        f32(i32(iid.x / config.size.x))
     );
 
+    // TODO: make wrap logic
     var val = 0.;
     for (var i = -1; i < 2; i++) {
         for (var j = -1; j < 2; j++) {
-            let sampleCords = vec2u(cords + vec2i(i, j));
-
-            if !(sampleCords.x >= config.size.x || sampleCords.y >= config.size.y) {
-                val += medium1[idx(sampleCords)];
-            }
+            let sampleCords = vec2u(wrap(cords + vec2f(f32(i), f32(j))));
+            val += medium1[idx(sampleCords)];
         }
     }
 
