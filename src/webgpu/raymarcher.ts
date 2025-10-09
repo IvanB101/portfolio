@@ -1,15 +1,15 @@
-import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";
-import shaders from "../shaders/noise.wgsl?raw"
-import type { WebGLContext } from './webgl';
-
-export interface Cellular {
-    render: () => void,
-}
+import shaders from "/shaders/raymarcher.wgsl?raw"
+import type { WebGPUContext } from './webgpu';
+import { makeShaderDataDefinitions, makeStructuredView } from 'webgpu-utils';
 
 const defs = makeShaderDataDefinitions(shaders);
 const uniform = makeStructuredView(defs.uniforms.ubo);
 
-export function cellular(wgpu: WebGLContext, canvas: HTMLCanvasElement): Cellular {
+export interface Raymarcher {
+    render: () => void,
+}
+
+export function raymarcher(wgpu: WebGPUContext, canvas: HTMLCanvasElement): Raymarcher {
     const device = wgpu.device;
     const context = canvas?.getContext('webgpu') as GPUCanvasContext;
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -22,12 +22,12 @@ export function cellular(wgpu: WebGLContext, canvas: HTMLCanvasElement): Cellula
     });
 
     const module = device.createShaderModule({
-        label: 'cellular module',
+        label: 'raymarcher module',
         code: shaders,
     });
 
     const pipeline = device.createRenderPipeline({
-        label: 'cellular pipeline',
+        label: 'raymarcher pipeline',
         layout: 'auto',
         vertex: {
             module,
@@ -39,7 +39,7 @@ export function cellular(wgpu: WebGLContext, canvas: HTMLCanvasElement): Cellula
     });
 
     const renderPassDescriptor: GPURenderPassDescriptor = {
-        label: 'cellular render pass',
+        label: 'raymarcher render pass',
         colorAttachments: [{
             view: context.getCurrentTexture().createView(),
             // clearValue: [0.3, 0.3, 0.3, 1],
@@ -49,11 +49,27 @@ export function cellular(wgpu: WebGLContext, canvas: HTMLCanvasElement): Cellula
     };
 
     const ubo = {
+        time: Date.now(),
         display: {
             max_width: window.screen.width,
             max_height: window.screen.height,
             width: canvas.width,
             height: canvas.height,
+        },
+        viewer: {
+            pos: [3, 5, 3],
+            forward: [-1, -2, -1],
+            up: [0, 1, 0],
+        },
+        // viewer: {
+        //     pos: [-3, 5, -3],
+        //     forward: [1, -2, 1],
+        //     up: [0, 1, 0],
+        // },
+        camera: {
+            fov: Math.PI / 2,
+            near: 0.1,
+            far: 20,
         },
     };
 
@@ -71,10 +87,13 @@ export function cellular(wgpu: WebGLContext, canvas: HTMLCanvasElement): Cellula
     });
 
     function render() {
-        ubo.display.width = canvas.width;
-        ubo.display.height = canvas.height;
-        uniform.set({ time: performance.now() })
-        uniform.set(ubo);
+        uniform.set({
+            time: performance.now(),
+            display: {
+                width: canvas.width,
+                height: canvas.height,
+            }
+        })
         device.queue.writeBuffer(uniformBuffer, 0, uniform.arrayBuffer);
 
         (renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[])[0].view = context.getCurrentTexture().createView();

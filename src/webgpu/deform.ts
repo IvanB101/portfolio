@@ -1,5 +1,5 @@
-import shaders from "../shaders/compute/deform_perlin.wgsl?raw"
-import type { WebGLContext } from './webgl';
+import shaders from "/shaders/compute/deform_perlin.wgsl?raw"
+import type { WebGPUContext } from './webgpu';
 import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";
 
 const defs = makeShaderDataDefinitions(shaders);
@@ -15,7 +15,7 @@ export interface DeformCompute {
     compute: (nVertices: number, vbuffer: GPUBuffer, params: NoiseParams) => GPUBuffer,
 }
 
-export function deform(wgpu: WebGLContext): DeformCompute {
+export function deform(wgpu: WebGPUContext): DeformCompute {
     const device = wgpu.device;
     const module = device.createShaderModule({
         label: 'world module',

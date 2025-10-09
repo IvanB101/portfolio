@@ -183,3 +183,34 @@ export class Transform3D {
         return rotMat(this.rotation);
     }
 };
+
+const values: { [idx: string]: number } = {
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "7": 7,
+    "8": 8,
+    "9": 9,
+    "a": 10,
+    "b": 11,
+    "c": 12,
+    "d": 13,
+    "e": 14,
+    "f": 15,
+}
+
+export function colorHexToVec3f(hex: string): [number, number, number] {
+    if (hex.length != 7 || hex[0] !== '#') throw new Error("color must have format: #dddddd with d a hexadecimal digit");
+
+    let res: number[] = [];
+    for (let i = 0; i < 3; i++) {
+        const color = (values[hex[i * 2 + 1]] * 16 + values[hex[i * 2 + 2]]) / 256;
+        res.push(color);
+    }
+
+    return res as [number, number, number];
+}

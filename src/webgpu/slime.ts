@@ -1,4 +1,5 @@
-import shaders from "../shaders/slime.wgsl?raw"
+import shaders from "/shaders/slime.wgsl?raw"
+import { colorHexToVec3f } from "./math";
 import type { WebGPUContext } from './webgpu';
 import { makeShaderDataDefinitions, makeStructuredView } from 'webgpu-utils';
 
@@ -8,13 +9,16 @@ export interface Slime {
 }
 
 export type UserConfig = {
+    seed?: number;
     nAgents?: number;
     size?: [number, number],
     sensoryAngle?: number;
+    sensoryOffset?: number;
     decay?: number;
     turnRate?: number;
-};
-export type Config = {
+    color?: [number, number, number];
+} & { [idx: string]: number | number[] };
+type Config = {
     time: number,
     nAgents: number;
     size: [number, number],
@@ -22,7 +26,7 @@ export type Config = {
     sensoryOffset: number;
     decay: number;
     turnRate: number;
-};
+} & { [idx: string]: number | number[] };
 const defaultConfig: Config = {
     time: 0,
     nAgents: 200000,
@@ -30,8 +34,12 @@ const defaultConfig: Config = {
     sensoryAngle: Math.PI / 4,
     sensoryOffset: 9,
     decay: 0.7,
-    turnRate: Math.PI / 4,
+    turnRate: Math.PI / 8,
 };
+type RenderConfig = {
+    dims: [number, number];
+    color: [number, number, number];
+}
 
 export type InitConfig = {
     seed: number;
@@ -39,7 +47,7 @@ export type InitConfig = {
     size: [number, number],
 };
 
-function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPUBuffer, config: Config): () => void {
+function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPUBuffer, config: RenderConfig): () => void {
     const defs = makeShaderDataDefinitions(shaders);
     const uniform = makeStructuredView(defs.uniforms.ubo);
 
@@ -80,18 +88,12 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPU
         }],
     };
 
-    const ubo = {
-        display: {
-            max: config.size,
-            current: config.size,
-        },
-    };
-
     const uniformBuffer = device.createBuffer({
         size: uniform.arrayBuffer.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    uniform.set(ubo);
+    console.log(config);
+    uniform.set(config);
 
     const bindGroup = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
@@ -136,14 +138,30 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPU
     return render;
 }
 
+function completeConfig(userConfig: UserConfig): Config {
+    const config: Config = defaultConfig;
+    for (const key in config) {
+        if (userConfig[key]) {
+            config[key] = userConfig[key];
+        }
+    }
+
+    return config as Config;
+}
+
 export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, userConfig: UserConfig): Slime {
     const defs = makeShaderDataDefinitions(shaders);
-    const config: Config = { ...defaultConfig, ...userConfig };
+    const time = performance.now();
+    const config = completeConfig(userConfig);
     const initConfig: InitConfig = {
-        seed: performance.now(),
+        seed: userConfig.seed || time,
         nAgents: config.nAgents,
         size: config.size,
     };
+    const renderConfig: RenderConfig = {
+        dims: config.size,
+        color: userConfig.color || colorHexToVec3f("#0C3B82"),
+    }
 
     const module = device.createShaderModule({
         label: 'slime simulation module',
@@ -272,10 +290,11 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         // console.log(new Float32Array(logBuf.getMappedRange()));
         // logBuf.unmap();
     }
-    const render = initRender(device, canvas, mediumBufs[1], config);
+    const render = initRender(device, canvas, mediumBufs[1], renderConfig);
 
     return {
         render,
         update,
     }
 }
+

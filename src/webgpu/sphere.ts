@@ -1,5 +1,5 @@
-import shaders from "../shaders/compute/sphere.wgsl?raw"
-import type { WebGLContext } from './webgl';
+import shaders from "/shaders/compute/sphere.wgsl?raw"
+import type { WebGPUContext } from './webgpu';
 import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";
 
 const defs = makeShaderDataDefinitions(shaders);
@@ -14,7 +14,7 @@ export interface SphereCompute {
     },
 }
 
-export function sphere(wgpu: WebGLContext): SphereCompute {
+export function sphere(wgpu: WebGPUContext): SphereCompute {
     const device = wgpu.device;
     const module = device.createShaderModule({
         label: 'world module',

@@ -7,7 +7,8 @@ struct Display {
 }
 
 struct Uniform {
-    display: Display,
+    dims: vec2u,
+    color: vec3f,
 }
 
 struct Agent {
@@ -32,9 +33,9 @@ fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
     );
 
     let uv = array(
-        vec2f(0., 2. * f32(ubo.display.current.y)),
+        vec2f(0., 2. * f32(ubo.dims.y)),
         vec2f(0., 0.),
-        vec2f(2. * f32(ubo.display.current.x), 0.)
+        vec2f(2. * f32(ubo.dims.x), 0.)
     );
 
     return Fragment(ndcpos[idx], uv[idx]);
@@ -42,7 +43,11 @@ fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
 
 @fragment
 fn fs(in: Fragment) -> @location(0) vec4f {
-    return vec4f(vec3f(medium1[u32(in.uv.x) + u32(in.uv.y) * ubo.display.current.x]), 1.);
+    return vec4f(mix(
+        vec3f(0.),
+        ubo.color,
+        medium1[u32(in.uv.x) + u32(in.uv.y) * ubo.dims.x]
+    ), 1.);
 }
 
 struct InitConfig {

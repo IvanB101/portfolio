@@ -1,6 +1,6 @@
 import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";
-import shaders from "../shaders/general.wgsl?raw"
-import type { WebGLContext } from './webgl';
+import shaders from "/shaders/general.wgsl?raw"
+import type { WebGPUContext } from './webgpu';
 import { sphere } from "./sphere";
 import { PerspectiveCamera } from "./camera";
 import { Transform3D } from "./math";
@@ -13,7 +13,7 @@ export interface World {
     render: () => void,
 }
 
-export function world(wgpu: WebGLContext, canvas: HTMLCanvasElement, n: number): World {
+export function world(wgpu: WebGPUContext, canvas: HTMLCanvasElement, n: number): World {
     const device = wgpu.device;
     const context = canvas?.getContext('webgpu') as GPUCanvasContext;
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
