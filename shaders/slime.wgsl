@@ -22,6 +22,8 @@ struct Fragment {
 }
 
 @group(0) @binding(0) var<uniform> ubo: Uniform;
+@group(0) @binding(1) var tex: texture_2d<f32>;
+@group(0) @binding(2) var samp: sampler;
 
 @vertex
 fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
@@ -32,9 +34,9 @@ fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
     );
 
     let uv = array(
-        vec2f(0., 2. * f32(ubo.dims.y)),
+        vec2f(0., 2.),
         vec2f(0., 0.),
-        vec2f(2. * f32(ubo.dims.x), 0.)
+        vec2f(2., 0.)
     );
 
     return Fragment(ndcpos[idx], uv[idx]);
@@ -45,7 +47,7 @@ fn fs(in: Fragment) -> @location(0) vec4f {
     return vec4f(mix(
         vec3f(0.),
         ubo.color,
-        medium1[u32(in.uv.x) + u32(in.uv.y) * ubo.dims.x]
+        textureSample(tex, samp, in.uv).r
     ), 1.);
 }
 
@@ -53,6 +55,7 @@ struct InitConfig {
     seed: u32,
     nAgents: u32,
     size: vec2u,
+    padding: u32,
 }
 
 fn urandom(n: u32) -> u32 {
@@ -89,7 +92,7 @@ fn initAgents(@builtin(global_invocation_id) iid: vec3u) {
     let pos = vec2f(iconfig.size) * 0.5 + vec2f(cos(a), sin(a)) * d;
 
     iagents[iid.x] = Agent(pos, angle);
-    medium[u32(pos.x) + u32(pos.y) * iconfig.size.x] = 1.;
+    medium[u32(pos.x) + u32(pos.y) * (iconfig.size.x + iconfig.padding)] = 1.;
 }
 
 struct Config {
@@ -100,10 +103,11 @@ struct Config {
     sensoryAngle: f32,
     sensoryOffset: f32,
     size: vec2u,
+    padding: u32,
 }
 
 fn idx(cords: vec2u) -> u32 {
-    return cords.x + cords.y * config.size.x;
+    return cords.x + cords.y * (config.size.x + config.padding);
 }
 
 fn wrap(cords: vec2f) -> vec2f {
@@ -170,7 +174,6 @@ fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
         f32(i32(iid.x / config.size.x))
     );
 
-    // TODO: make wrap logic
     var val = 0.;
     for (var i = -1; i < 2; i++) {
         for (var j = -1; j < 2; j++) {
@@ -179,5 +182,5 @@ fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
         }
     }
 
-    medium2[iid.x] = val * (1. / 9.) * config.decay;
+    medium2[idx(vec2u(cords))] = val * (1. / 9.) * config.decay;
 }

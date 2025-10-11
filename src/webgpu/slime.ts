@@ -8,6 +8,10 @@ export interface Slime {
     update: () => void,
 }
 
+function bufferPaddingBytes(rowByteSize: number): number {
+    return 256 - (rowByteSize % 256);
+}
+
 export type UserConfig = {
     seed?: number;
     nAgents?: number;
@@ -26,16 +30,32 @@ type Config = {
     sensoryOffset: number;
     decay: number;
     turnRate: number;
+    padding: number;
 } & { [idx: string]: number | number[] };
+const size: [number, number] = [400, 300];
 const defaultConfig: Config = {
     time: 0,
     nAgents: 100000,
-    size: [400, 300],
+    size,
     sensoryAngle: Math.PI / 4,
     sensoryOffset: 6,
     decay: 0.7,
     turnRate: Math.PI / 8,
+    padding: bufferPaddingBytes(size[0] * 4) / 4,
 };
+
+function completeConfig(userConfig: UserConfig): Config {
+    const config: Config = defaultConfig;
+    for (const key in config) {
+        if (userConfig[key]) {
+            config[key] = userConfig[key];
+        }
+    }
+    config.padding = bufferPaddingBytes(config.size[0] * 4) / 4;
+
+    return config as Config;
+}
+
 type RenderConfig = {
     dims: [number, number];
     color: [number, number, number];
@@ -45,9 +65,10 @@ export type InitConfig = {
     seed: number;
     nAgents: number;
     size: [number, number],
+    padding: number;
 };
 
-function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPUBuffer, config: RenderConfig): () => void {
+function initRender(device: GPUDevice, canvas: HTMLCanvasElement, texture: GPUTexture, config: RenderConfig): () => void {
     const defs = makeShaderDataDefinitions(shaders);
     const uniform = makeStructuredView(defs.uniforms.ubo);
 
@@ -66,9 +87,39 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPU
         code: shaders,
     });
 
+    const bindGroupLayout = device.createBindGroupLayout({
+        entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.VERTEX,
+                buffer: {
+                    type: 'uniform'
+                }
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.FRAGMENT,
+                texture: {
+                    sampleType: 'unfilterable-float',
+                    viewDimension: '2d',
+                    multisampled: false,
+                },
+            },
+            {
+                binding: 2,
+                visibility: GPUShaderStage.FRAGMENT,
+                sampler: {
+                    type: 'non-filtering',
+                },
+            },
+        ],
+    });
+    const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout],
+    })
     const pipeline = device.createRenderPipeline({
         label: 'slime pipeline',
-        layout: 'auto',
+        layout: pipelineLayout,
         vertex: {
             module,
         },
@@ -94,11 +145,13 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPU
     });
     uniform.set(config);
 
+    const sampler = device.createSampler({});
     const bindGroup = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
         entries: [
             { binding: 0, resource: { buffer: uniformBuffer } },
-            { binding: 1, resource: { buffer: mediumBuf } },
+            { binding: 1, resource: texture.createView() },
+            { binding: 2, resource: sampler },
         ],
     });
 
@@ -137,17 +190,6 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPU
     return render;
 }
 
-function completeConfig(userConfig: UserConfig): Config {
-    const config: Config = defaultConfig;
-    for (const key in config) {
-        if (userConfig[key]) {
-            config[key] = userConfig[key];
-        }
-    }
-
-    return config as Config;
-}
-
 export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, userConfig: UserConfig): Slime {
     const defs = makeShaderDataDefinitions(shaders);
     const time = performance.now();
@@ -156,6 +198,7 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         seed: userConfig.seed || time,
         nAgents: config.nAgents,
         size: config.size,
+        padding: config.padding,
     };
     const renderConfig: RenderConfig = {
         dims: config.size,
@@ -188,9 +231,9 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         size: config.nAgents * 16,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
-    const size = config.size[0] * config.size[1] * 16;
+    const size = (config.size[0] + config.padding) * config.size[1] * 16;
     const mediumBufs = [
-        device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, }),
+        device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, }),
         device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC, }),
     ];
 
@@ -246,6 +289,12 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         ]
     });
 
+    const texture = device.createTexture({
+        size: config.size,
+        format: 'r32float',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+    })
+
     // const logBuf = device.createBuffer({
     //     size: config.nAgents * 16,
     //     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
@@ -273,11 +322,19 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         pass.end();
         device.queue.submit([encoder.finish()]);
 
+        encoder = device.createCommandEncoder();
+        encoder.copyBufferToTexture(
+            { buffer: mediumBufs[0], bytesPerRow: (config.size[0] + config.padding) * 4 },
+            { texture },
+            [...config.size, 1]
+        )
+        device.queue.submit([encoder.finish()]);
+
         // await logBuf.mapAsync(GPUMapMode.READ);
         // console.log(new Float32Array(logBuf.getMappedRange()));
         // logBuf.unmap();
     }
-    const render = initRender(device, canvas, mediumBufs[0], renderConfig);
+    const render = initRender(device, canvas, texture, renderConfig);
 
     return {
         render,
