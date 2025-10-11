@@ -29,10 +29,10 @@ type Config = {
 } & { [idx: string]: number | number[] };
 const defaultConfig: Config = {
     time: 0,
-    nAgents: 200000,
-    size: [800, 600],
+    nAgents: 100000,
+    size: [400, 300],
     sensoryAngle: Math.PI / 4,
-    sensoryOffset: 9,
+    sensoryOffset: 6,
     decay: 0.7,
     turnRate: Math.PI / 8,
 };
@@ -92,7 +92,6 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, mediumBuf: GPU
         size: uniform.arrayBuffer.byteLength,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    console.log(config);
     uniform.set(config);
 
     const bindGroup = device.createBindGroup({
@@ -179,11 +178,6 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         layout: 'auto',
         compute: { module, entryPoint: 'updateAgents' },
     });
-    const depositPipeline = device.createComputePipeline({
-        label: 'slime deposit agents pipeline',
-        layout: 'auto',
-        compute: { module, entryPoint: 'deposit' },
-    });
     const updateMediumPipeline = device.createComputePipeline({
         label: 'slime update agents pipeline',
         layout: 'auto',
@@ -214,6 +208,7 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
             entries: [
                 { binding: 0, resource: { buffer: iconfig } },
                 { binding: 1, resource: { buffer: agentBuf } },
+                { binding: 2, resource: { buffer: mediumBufs[1] } },
             ],
         });
 
@@ -237,16 +232,9 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         layout: updateAgentsPipeline.getBindGroupLayout(0),
         entries: [
             { binding: 0, resource: { buffer: configBuf } },
-            { binding: 1, resource: { buffer: mediumBufs[1] } },
-            { binding: 2, resource: { buffer: agentBuf } }
-        ]
-    });
-    const depositBindGroup = device.createBindGroup({
-        layout: depositPipeline.getBindGroupLayout(0),
-        entries: [
-            { binding: 0, resource: { buffer: configBuf } },
-            { binding: 1, resource: { buffer: mediumBufs[1] } },
-            { binding: 2, resource: { buffer: agentBuf } }
+            { binding: 1, resource: { buffer: mediumBufs[0] } },
+            { binding: 2, resource: { buffer: mediumBufs[1] } },
+            { binding: 3, resource: { buffer: agentBuf } }
         ]
     });
     const mediumBindGroup = device.createBindGroup({
@@ -267,30 +255,29 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         configView.set({ time: performance.now() });
         device.queue.writeBuffer(configBuf, 0, configView.arrayBuffer);
 
-        const encoder = device.createCommandEncoder();
-        encoder.copyBufferToBuffer(mediumBufs[1], mediumBufs[0]);
-        // encoder.copyBufferToBuffer(agentBuf, logBuf);
+        var encoder = device.createCommandEncoder();
 
-        const pass = encoder.beginComputePass({ label: 'slime init agents compute pass', });
-        pass.setBindGroup(0, agentBindGroup);
-        pass.setPipeline(updateAgentsPipeline);
-        pass.dispatchWorkgroups(Math.ceil(config.nAgents / 64));
+        var pass = encoder.beginComputePass({ label: 'slime init agents compute pass', });
         pass.setBindGroup(0, mediumBindGroup);
         pass.setPipeline(updateMediumPipeline);
         pass.dispatchWorkgroups(Math.ceil(config.size[0] * config.size[1] / 64));
-        pass.setBindGroup(0, depositBindGroup);
-        pass.setPipeline(depositPipeline);
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+
+        encoder = device.createCommandEncoder();
+        encoder.copyBufferToBuffer(mediumBufs[1], mediumBufs[0]);
+        pass = encoder.beginComputePass({ label: 'slime init agents compute pass', });
+        pass.setBindGroup(0, agentBindGroup);
+        pass.setPipeline(updateAgentsPipeline);
         pass.dispatchWorkgroups(Math.ceil(config.nAgents / 64));
         pass.end();
-
-        const commandBuffer = encoder.finish();
-        device.queue.submit([commandBuffer]);
+        device.queue.submit([encoder.finish()]);
 
         // await logBuf.mapAsync(GPUMapMode.READ);
         // console.log(new Float32Array(logBuf.getMappedRange()));
         // logBuf.unmap();
     }
-    const render = initRender(device, canvas, mediumBufs[1], renderConfig);
+    const render = initRender(device, canvas, mediumBufs[0], renderConfig);
 
     return {
         render,

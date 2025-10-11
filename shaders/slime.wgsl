@@ -22,7 +22,6 @@ struct Fragment {
 }
 
 @group(0) @binding(0) var<uniform> ubo: Uniform;
-@group(0) @binding(1) var<storage, read_write> medium1: array<f32>;
 
 @vertex
 fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
@@ -75,6 +74,7 @@ fn random(n: u32) -> f32 {
 
 @group(0) @binding(0) var<uniform> iconfig: InitConfig;
 @group(0) @binding(1) var<storage, read_write> iagents: array<Agent>;
+@group(0) @binding(2) var<storage, read_write> medium: array<f32>;
 
 @compute @workgroup_size(64, 1, 1)
 fn initAgents(@builtin(global_invocation_id) iid: vec3u) {
@@ -89,6 +89,7 @@ fn initAgents(@builtin(global_invocation_id) iid: vec3u) {
     let pos = vec2f(iconfig.size) * 0.5 + vec2f(cos(a), sin(a)) * d;
 
     iagents[iid.x] = Agent(pos, angle);
+    medium[u32(pos.x) + u32(pos.y) * iconfig.size.x] = 1.;
 }
 
 struct Config {
@@ -100,8 +101,6 @@ struct Config {
     sensoryOffset: f32,
     size: vec2u,
 }
-
-@group(0) @binding(0) var<uniform> config: Config;
 
 fn idx(cords: vec2u) -> u32 {
     return cords.x + cords.y * config.size.x;
@@ -115,7 +114,10 @@ fn wrap(cords: vec2f) -> vec2f {
     );
 }
 
-@group(0) @binding(2) var<storage, read_write> agents: array<Agent>;
+@group(0) @binding(0) var<uniform> config: Config;
+@group(0) @binding(1) var<storage, read_write> medium1: array<f32>;
+@group(0) @binding(2) var<storage, read_write> medium2: array<f32>;
+@group(0) @binding(3) var<storage, read_write> agents: array<Agent>;
 
 @compute @workgroup_size(64, 1, 1)
 fn updateAgents(@builtin(global_invocation_id) iid: vec3u) {
@@ -128,12 +130,12 @@ fn updateAgents(@builtin(global_invocation_id) iid: vec3u) {
 
     let angleLeft = angle + config.sensoryAngle;
     let leftCords = vec2i(wrap(pos + vec2f(cos(angleLeft), sin(angleLeft)) * config.sensoryOffset));
-    let left = medium1[idx(vec2u(leftCords))];
+    let left = medium2[idx(vec2u(leftCords))];
     let frontCords = vec2i(wrap(pos + vec2f(cos(angle), sin(angle)) * config.sensoryOffset));
-    var front = medium1[idx(vec2u(frontCords))];
+    var front = medium2[idx(vec2u(frontCords))];
     let angleRight = angle - config.sensoryAngle;
     let rightCords = vec2i(wrap(pos + vec2f(cos(angleRight), sin(angleRight)) * config.sensoryOffset));
-    var right = medium1[idx(vec2u(rightCords))];
+    var right = medium2[idx(vec2u(rightCords))];
 
     var delta = 0.;
     if front >= max(left, right) {
@@ -155,18 +157,8 @@ fn updateAgents(@builtin(global_invocation_id) iid: vec3u) {
     pos = wrap(pos + vec2f(cos(angle), sin(angle)));
 
     agents[iid.x] = Agent(pos, angle);
-}
-
-@compute @workgroup_size(64, 1, 1)
-fn deposit(@builtin(global_invocation_id) iid: vec3u) {
-    if iid.x >= config.nAgents {
-        return;
-    }
-
     medium1[idx(vec2u(round(agents[iid.x].pos)))] = 1.;
 }
-
-@group(0) @binding(2) var<storage, read_write> medium2: array<f32>;
 
 @compute @workgroup_size(64, 1, 1)
 fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
