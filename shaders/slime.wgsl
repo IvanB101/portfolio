@@ -55,7 +55,6 @@ struct InitConfig {
     seed: u32,
     nAgents: u32,
     size: vec2u,
-    padding: u32,
 }
 
 fn urandom(n: u32) -> u32 {
@@ -92,7 +91,7 @@ fn initAgents(@builtin(global_invocation_id) iid: vec3u) {
     let pos = vec2f(iconfig.size) * 0.5 + vec2f(cos(a), sin(a)) * d;
 
     iagents[iid.x] = Agent(pos, angle);
-    medium[u32(pos.x) + u32(pos.y) * (iconfig.size.x + iconfig.padding)] = 1.;
+    medium[u32(pos.x) + u32(pos.y) * iconfig.size.x] = 1.;
 }
 
 struct Config {
@@ -103,11 +102,11 @@ struct Config {
     sensoryAngle: f32,
     sensoryOffset: f32,
     size: vec2u,
-    padding: u32,
+    padding: u32, // in number of u32
 }
 
 fn idx(cords: vec2u) -> u32 {
-    return cords.x + cords.y * (config.size.x + config.padding);
+    return cords.x + cords.y * config.size.x;
 }
 
 fn wrap(cords: vec2f) -> vec2f {
@@ -183,4 +182,16 @@ fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
     }
 
     medium2[idx(vec2u(cords))] = val * (1. / 9.) * config.decay;
+}
+
+@group(0) @binding(1) var<storage, read_write> data: array<f32>;
+@group(0) @binding(2) var<storage, read_write> converted: array<u32>;
+
+@compute @workgroup_size(64, 1, 1)
+fn convert(@builtin(global_invocation_id) iid: vec3u) {
+    if iid.x >= config.size.x * config.size.y {
+        return;
+    }
+
+    converted[iid.x + config.padding * (iid.x / config.size.x)] = u32(round(data[iid.x] * 255.));
 }
