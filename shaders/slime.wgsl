@@ -189,9 +189,16 @@ fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
 
 @compute @workgroup_size(64, 1, 1)
 fn convert(@builtin(global_invocation_id) iid: vec3u) {
-    if iid.x >= config.size.x * config.size.y {
+    let idx = iid.x << 2u;
+    if idx >= config.size.x * config.size.y {
         return;
     }
 
-    converted[iid.x + config.padding * (iid.x / config.size.x)] = u32(round(data[iid.x] * 255.));
+    var val = 0u;
+    val |= u32(round(data[idx] * 255.));
+    val |= u32(round(data[idx + 1u] * 255.)) << 8u;
+    val |= u32(round(data[idx + 2u] * 255.)) << 16u;
+    val |= u32(round(data[idx + 3u] * 255.)) << 24u;
+
+    converted[iid.x + ((config.padding * (idx / config.size.x)) >> 2u)] = val;
 }
