@@ -68,6 +68,7 @@ type RenderConfig = {
     uvMin: [number, number];
     uvMax: [number, number];
     size: [number, number];
+    startDims: [number, number];
     color: [number, number, number];
 }
 
@@ -131,17 +132,25 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, medium: GPUBuf
     });
 
     function render() {
+        let uvMin = [
+            Math.max(config.startDims[0] - canvas.width, 0) / config.startDims[0] / 2,
+            Math.max(config.startDims[1] - canvas.height, 0) / config.startDims[1] / 2,
+        ];
+        let uvMax = [
+            1 - uvMin[0],
+            1 - uvMin[1],
+        ]
+
         uniform.set({
             time: performance.now(),
-            uvMin: [0, 0],
-            uvMax: [1, 1],
+            uvMin,
+            uvMax,
         });
         device.queue.writeBuffer(uniformBuffer, 0, uniform.arrayBuffer);
 
         (renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[])[0].view = context.getCurrentTexture().createView();
 
         const encoder = device.createCommandEncoder({ label: 'slime render encoder' });
-
         const pass = encoder.beginRenderPass(renderPassDescriptor);
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
@@ -165,9 +174,10 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         size: config.size,
     };
     const renderConfig: RenderConfig = {
+        size: config.size,
         uvMin: [0, 0],
         uvMax: [1, 1],
-        size: config.size,
+        startDims: userConfig.innerDims,
         color: userConfig.color || colorHexToVec3f("#0C3B82"),
     }
 

@@ -2,9 +2,9 @@ const PI = 3.1415926535;
 const sqrt2 = 1.4142135624;
 
 struct Uniform {
+    size: vec2u,
     uvMin: vec2f,
     uvMax: vec2f,
-    size: vec2u,
     color: vec3f,
 }
 
@@ -28,11 +28,11 @@ fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
         vec4f(-1., -1., 0., 1.),
         vec4f(3., -1., 0., 1.)
     );
-
+    let uvMax = ubo.uvMax * 2. - ubo.uvMin;
     let uv = array(
-        vec2f(0. + ubo.uvMin.x, 2. * (ubo.uvMax.y - ubo.uvMin.y)),
-        vec2f(0. + ubo.uvMin.x, 0. + ubo.uvMin.y),
-        vec2f(2. * (ubo.uvMax.x - ubo.uvMin.x), 0. + ubo.uvMin.y)
+        vec2f(ubo.uvMin.x, uvMax.y),
+        vec2f(ubo.uvMin.x, ubo.uvMin.y),
+        vec2f(uvMax.x, ubo.uvMin.y)
     );
 
     return Fragment(ndcpos[idx], uv[idx]);
@@ -45,24 +45,20 @@ fn fidx(cords: vec2u) -> u32 {
 @fragment
 fn fs(in: Fragment) -> @location(0) vec4f {
     let fcords = vec2f(ubo.size) * in.uv;
-    let cords = vec2u(floor(vec2f(ubo.size) * in.uv) - 2.);
+    let cords = max(vec2u(fcords - 1.), vec2u(0u));
     let frac = fcords - floor(fcords);
 
     let bl = data[fidx(cords)];
-    let br = data[fidx(cords + vec2u(1u, 0u))];
-    let tl = data[fidx(cords + vec2u(0u, 1u))];
-    let tr = data[fidx(cords + vec2u(1u, 1u))];
+    let br = data[fidx((cords + vec2u(1u, 0u)) % ubo.size)];
+    let tl = data[fidx((cords + vec2u(0u, 1u)) % ubo.size)];
+    let tr = data[fidx((cords + vec2u(1u, 1u)) % ubo.size)];
 
     let i1 = mix(bl, br, frac.x);
     let i2 = mix(tl, tr, frac.x);
 
     let val = mix(i1, i2, frac.y);
 
-    return vec4f(mix(
-        vec3f(0.),
-        ubo.color,
-        val
-    ), 1.);
+    return vec4f(mix(vec3f(0.), ubo.color, val), 1.);
 }
 
 struct InitConfig {
