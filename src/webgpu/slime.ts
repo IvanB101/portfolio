@@ -17,6 +17,7 @@ function bufferPaddingBytes(rowSize: number): number {
 }
 
 export type UserConfig = {
+    innerDims: [number, number],
     seed?: number;
     nAgents?: number;
     size?: [number, number],
@@ -36,13 +37,16 @@ type Config = {
     turnRate: number;
     padding: number;
 } & { [idx: string]: number | number[] };
-const size: [number, number] = [400, 300];
+const width = 400;
+const aspect = screen.width / screen.height;
+const height = Math.ceil(width / aspect);
+const size: [number, number] = [width, height];
 const defaultConfig: Config = {
     time: 0,
     nAgents: 100000,
     size,
     sensoryAngle: Math.PI / 4,
-    sensoryOffset: 6,
+    sensoryOffset: 5,
     decay: 0.7,
     turnRate: Math.PI / 8,
     padding: bufferPaddingBytes(size[0]),
@@ -61,7 +65,9 @@ function completeConfig(userConfig: UserConfig): Config {
 }
 
 type RenderConfig = {
-    dims: [number, number];
+    uvMin: [number, number];
+    uvMax: [number, number];
+    size: [number, number];
     color: [number, number, number];
 }
 
@@ -71,7 +77,7 @@ export type InitConfig = {
     size: [number, number],
 };
 
-function initRender(device: GPUDevice, canvas: HTMLCanvasElement, texture: GPUTexture, config: RenderConfig): () => void {
+function initRender(device: GPUDevice, canvas: HTMLCanvasElement, medium: GPUBuffer, config: RenderConfig): () => void {
     const defs = makeShaderDataDefinitions(shaders);
     const uniform = makeStructuredView(defs.uniforms.ubo);
 
@@ -89,40 +95,9 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, texture: GPUTe
         label: 'slime module',
         code: shaders,
     });
-
-    const bindGroupLayout = device.createBindGroupLayout({
-        entries: [
-            {
-                binding: 0,
-                visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.VERTEX,
-                buffer: {
-                    type: 'uniform'
-                }
-            },
-            {
-                binding: 1,
-                visibility: GPUShaderStage.FRAGMENT,
-                texture: {
-                    sampleType: 'float',
-                    viewDimension: '2d',
-                    multisampled: false,
-                },
-            },
-            {
-                binding: 2,
-                visibility: GPUShaderStage.FRAGMENT,
-                sampler: {
-                    type: 'filtering',
-                },
-            },
-        ],
-    });
-    const pipelineLayout = device.createPipelineLayout({
-        bindGroupLayouts: [bindGroupLayout],
-    })
     const pipeline = device.createRenderPipeline({
         label: 'slime pipeline',
-        layout: pipelineLayout,
+        layout: 'auto',
         vertex: {
             module,
         },
@@ -131,7 +106,6 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, texture: GPUTe
             targets: [{ format: presentationFormat }],
         },
     });
-
     const renderPassDescriptor: GPURenderPassDescriptor = {
         label: 'slime render pass',
         colorAttachments: [{
@@ -148,22 +122,20 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, texture: GPUTe
     });
     uniform.set(config);
 
-    const sampler = device.createSampler({
-        magFilter: 'linear',
-    });
     const bindGroup = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
         entries: [
             { binding: 0, resource: { buffer: uniformBuffer } },
-            { binding: 1, resource: texture.createView() },
-            { binding: 2, resource: sampler },
+            { binding: 1, resource: medium },
         ],
     });
 
     function render() {
         uniform.set({
             time: performance.now(),
-        })
+            uvMin: [0, 0],
+            uvMax: [1, 1],
+        });
         device.queue.writeBuffer(uniformBuffer, 0, uniform.arrayBuffer);
 
         (renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[])[0].view = context.getCurrentTexture().createView();
@@ -180,18 +152,6 @@ function initRender(device: GPUDevice, canvas: HTMLCanvasElement, texture: GPUTe
         device.queue.submit([commandBuffer]);
     }
 
-    // const observer = new ResizeObserver(entries => {
-    //     for (const entry of entries) {
-    //         const canvas = entry.target as HTMLCanvasElement;
-    //         const width = entry.contentBoxSize[0].inlineSize;
-    //         const height = entry.contentBoxSize[0].blockSize;
-    //         canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
-    //         canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
-    //     }
-    //     render();
-    // });
-    // observer.observe(canvas);
-
     return render;
 }
 
@@ -205,7 +165,9 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         size: config.size,
     };
     const renderConfig: RenderConfig = {
-        dims: config.size,
+        uvMin: [0, 0],
+        uvMax: [1, 1],
+        size: config.size,
         color: userConfig.color || colorHexToVec3f("#0C3B82"),
     }
 
@@ -229,11 +191,6 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         label: 'slime update agents pipeline',
         layout: 'auto',
         compute: { module, entryPoint: 'updateMedium' },
-    });
-    const convertDataPipeline = device.createComputePipeline({
-        label: 'slime convert data pipeline',
-        layout: 'auto',
-        compute: { module, entryPoint: 'convert' },
     });
 
     const agentBuf = device.createBuffer({
@@ -298,25 +255,6 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         ]
     });
 
-    const intermediate = device.createBuffer({
-        size: (config.size[0] + config.padding) * config.size[1] * 4,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
-    })
-    const convertBindGroup = device.createBindGroup({
-        layout: convertDataPipeline.getBindGroupLayout(0),
-        entries: [
-            { binding: 0, resource: { buffer: configBuf } },
-            { binding: 1, resource: { buffer: mediumBufs[0] } },
-            { binding: 2, resource: { buffer: intermediate } },
-        ]
-    });
-
-    const texture = device.createTexture({
-        size: config.size,
-        format: 'r8unorm',
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
-    })
-
     function update() {
         configView.set({ time: performance.now() });
         device.queue.writeBuffer(configBuf, 0, configView.arrayBuffer);
@@ -336,21 +274,10 @@ export function slime({ device }: WebGPUContext, canvas: HTMLCanvasElement, user
         pass.setBindGroup(0, agentBindGroup);
         pass.setPipeline(updateAgentsPipeline);
         pass.dispatchWorkgroups(Math.ceil(config.nAgents / 64));
-        pass.setBindGroup(0, convertBindGroup);
-        pass.setPipeline(convertDataPipeline);
-        pass.dispatchWorkgroups(Math.ceil(config.size[0] * config.size[1] / 16));
         pass.end();
         device.queue.submit([encoder.finish()]);
-
-        encoder = device.createCommandEncoder();
-        encoder.copyBufferToTexture(
-            { buffer: intermediate, bytesPerRow: config.size[0] + config.padding },
-            { texture },
-            [...config.size, 1]
-        )
-        device.queue.submit([encoder.finish()]);
     }
-    const render = initRender(device, canvas, texture, renderConfig);
+    const render = initRender(device, canvas, mediumBufs[0], renderConfig);
 
     return {
         render,

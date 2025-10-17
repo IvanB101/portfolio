@@ -1,13 +1,10 @@
 const PI = 3.1415926535;
 const sqrt2 = 1.4142135624;
 
-struct Display {
-    max: vec2u,
-    current: vec2u,
-}
-
 struct Uniform {
-    dims: vec2u,
+    uvMin: vec2f,
+    uvMax: vec2f,
+    size: vec2u,
     color: vec3f,
 }
 
@@ -22,8 +19,7 @@ struct Fragment {
 }
 
 @group(0) @binding(0) var<uniform> ubo: Uniform;
-@group(0) @binding(1) var tex: texture_2d<f32>;
-@group(0) @binding(2) var samp: sampler;
+@group(0) @binding(1) var<storage> data: array<f32>;
 
 @vertex
 fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
@@ -34,20 +30,38 @@ fn vs(@builtin(vertex_index) idx: u32) -> Fragment {
     );
 
     let uv = array(
-        vec2f(0., 2.),
-        vec2f(0., 0.),
-        vec2f(2., 0.)
+        vec2f(0. + ubo.uvMin.x, 2. * (ubo.uvMax.y - ubo.uvMin.y)),
+        vec2f(0. + ubo.uvMin.x, 0. + ubo.uvMin.y),
+        vec2f(2. * (ubo.uvMax.x - ubo.uvMin.x), 0. + ubo.uvMin.y)
     );
 
     return Fragment(ndcpos[idx], uv[idx]);
 }
 
+fn fidx(cords: vec2u) -> u32 {
+    return cords.x + cords.y * ubo.size.x;
+}
+
 @fragment
 fn fs(in: Fragment) -> @location(0) vec4f {
+    let fcords = vec2f(ubo.size) * in.uv;
+    let cords = vec2u(floor(vec2f(ubo.size) * in.uv) - 2.);
+    let frac = fcords - floor(fcords);
+
+    let bl = data[fidx(cords)];
+    let br = data[fidx(cords + vec2u(1u, 0u))];
+    let tl = data[fidx(cords + vec2u(0u, 1u))];
+    let tr = data[fidx(cords + vec2u(1u, 1u))];
+
+    let i1 = mix(bl, br, frac.x);
+    let i2 = mix(tl, tr, frac.x);
+
+    let val = mix(i1, i2, frac.y);
+
     return vec4f(mix(
         vec3f(0.),
         ubo.color,
-        textureSample(tex, samp, in.uv).r
+        val
     ), 1.);
 }
 
@@ -182,23 +196,4 @@ fn updateMedium(@builtin(global_invocation_id) iid: vec3u) {
     }
 
     medium2[idx(vec2u(cords))] = val * (1. / 9.) * config.decay;
-}
-
-@group(0) @binding(1) var<storage, read_write> data: array<f32>;
-@group(0) @binding(2) var<storage, read_write> converted: array<u32>;
-
-@compute @workgroup_size(64, 1, 1)
-fn convert(@builtin(global_invocation_id) iid: vec3u) {
-    let idx = iid.x << 2u;
-    if idx >= config.size.x * config.size.y {
-        return;
-    }
-
-    var val = 0u;
-    val |= u32(round(data[idx] * 255.));
-    val |= u32(round(data[idx + 1u] * 255.)) << 8u;
-    val |= u32(round(data[idx + 2u] * 255.)) << 16u;
-    val |= u32(round(data[idx + 3u] * 255.)) << 24u;
-
-    converted[iid.x + ((config.padding * (idx / config.size.x)) >> 2u)] = val;
 }
