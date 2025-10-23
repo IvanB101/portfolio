@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Archivo, Roboto } from "next/font/google";
+import { Archivo_Black, Roboto } from "next/font/google";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -7,9 +7,11 @@ const roboto = Roboto({
   subsets: ["latin"],
 });
 
-const archivo = Archivo({
+const archivo = Archivo_Black({
   variable: "--font-archivo",
   subsets: ["latin"],
+  display: "swap",
+  weight: "400",
 });
 
 export const metadata: Metadata = {
