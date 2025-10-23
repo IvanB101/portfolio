@@ -1,9 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-    --color-main: rgb(24, 12, 130);
     --color-blue: rgb(12, 59, 130);
+    --color-indigo: rgb(24, 12, 130);
     --color-purple: rgb(83, 12, 130);
+
+    --font-roboto: 'Roboto', 'sans-serif';
+    --font-archivo: "Archivo Black", sans-serif;
+
+    /* TODO:  add custom width */
+    /* --content-width: 130vh; */
 }
 
 :root {
