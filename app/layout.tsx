@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo_Black, Roboto } from "next/font/google";
 import "./globals.css";
+import Background from "@/components/Background";
 
 const roboto = Roboto({
   variable: "--font-roboto",
@@ -29,7 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${roboto.variable} antialiased`}>{children}</body>
+      <body className={`${roboto.variable} antialiased`}>
+        <Background />
+        {children}
+      </body>
     </html>
   );
 }

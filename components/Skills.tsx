@@ -16,7 +16,7 @@ export default function Skills() {
         <Skill name="Java" />
         <Skill name="Javascript" />
         <Skill name="Lua" />
-        <Skill name="Next" />
+        <Skill name="Next" classes="size-12 invert" />
         <Skill name="OpenGL" classes="w-24 h-12 object-cover" />
         <Skill name="PostgreSQL" />
         <Skill name="Python" />
