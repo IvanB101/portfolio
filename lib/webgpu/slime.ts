@@ -1,3 +1,5 @@
+import "client-only";
+
 import shaders from "@/shaders/slime.wgsl";
 import { colorHexToVec3f } from "./math";
 import type { WebGPUContext } from "./webgpu";
@@ -20,7 +22,7 @@ export type UserConfig = {
   innerDims: [number, number];
   seed?: number;
   nAgents?: number;
-  size?: [number, number];
+  size: [number, number];
   sensoryAngle?: number;
   sensoryOffset?: number;
   decay?: number;
@@ -37,19 +39,15 @@ type Config = {
   turnRate: number;
   padding: number;
 } & { [idx: string]: number | number[] };
-const width = 400;
-const aspect = screen.width / screen.height;
-const height = Math.ceil(width / aspect);
-const size: [number, number] = [width, height];
 const defaultConfig: Config = {
   time: 0,
   nAgents: 100000,
-  size,
+  size: [0, 0],
   sensoryAngle: Math.PI / 4,
   sensoryOffset: 5,
   decay: 0.7,
   turnRate: Math.PI / 8,
-  padding: bufferPaddingBytes(size[0]),
+  padding: bufferPaddingBytes(0),
 };
 
 function completeConfig(userConfig: UserConfig): Config {

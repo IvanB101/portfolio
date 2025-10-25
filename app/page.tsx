@@ -13,44 +13,46 @@ const sectionIds = ["home", "projects", "skills", "contact"];
 const activeClasses = ["text-indigo-600", "bg-black"];
 const threshold = 200;
 
-export default function Home() {
-  let active = "none";
+let active = "none";
 
-  useEffect(() => {
-    const sections = sectionIds.map(
-      (id) => document.getElementById(id) as HTMLElement,
-    );
-    const links = sectionIds.map(
-      (id) => document.getElementById(id + "-link") as HTMLElement,
-    );
+function hydrate() {
+  const sections = sectionIds.map(
+    (id) => document.getElementById(id) as HTMLElement,
+  );
+  const links = sectionIds.map(
+    (id) => document.getElementById(id + "-link") as HTMLElement,
+  );
 
-    let newActive = "home";
-    let activeLink = links[0];
+  let newActive = "home";
+  let activeLink = links[0];
 
-    function updateActiveLink() {
-      for (let i = 0; i < sectionIds.length; i++) {
-        if (sections[i].getBoundingClientRect().y <= threshold) {
-          newActive = sectionIds[i];
-          activeLink = links[i];
-        }
-      }
-      if (newActive === active) {
-        return;
-      }
-
-      for (const link of links) {
-        for (const activeClass of activeClasses) {
-          link.classList.remove(activeClass);
-        }
-      }
-      for (const activeClass of activeClasses) {
-        activeLink.classList.add(activeClass);
+  function updateActiveLink() {
+    for (let i = 0; i < sectionIds.length; i++) {
+      if (sections[i].getBoundingClientRect().y <= threshold) {
+        newActive = sectionIds[i];
+        activeLink = links[i];
       }
     }
+    if (newActive === active) {
+      return;
+    }
 
-    document.addEventListener("scroll", updateActiveLink);
-    updateActiveLink();
-  }, []);
+    for (const link of links) {
+      for (const activeClass of activeClasses) {
+        link.classList.remove(activeClass);
+      }
+    }
+    for (const activeClass of activeClasses) {
+      activeLink.classList.add(activeClass);
+    }
+  }
+
+  document.addEventListener("scroll", updateActiveLink);
+  updateActiveLink();
+}
+
+export default function Home() {
+  useEffect(hydrate, []);
 
   return (
     <div className="overflow-hidden font-roboto">

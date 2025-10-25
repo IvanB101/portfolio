@@ -1,3 +1,5 @@
+import "client-only";
+
 import shaders from "@/shaders/raymarcher.wgsl";
 import type { WebGPUContext } from "./webgpu";
 import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";

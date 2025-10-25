@@ -1,3 +1,5 @@
+import "client-only";
+
 export interface WebGPUContext {
   device: GPUDevice;
   adapter: GPUAdapter;

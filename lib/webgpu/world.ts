@@ -1,3 +1,5 @@
+import "client-only";
+
 import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";
 import shaders from "@shaders/general.wgsl";
 import type { WebGPUContext } from "./webgpu";

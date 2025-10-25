@@ -1,4 +1,6 @@
-import shaders from "/shaders/compute/deform_perlin.wgsl?raw";
+import "client-only";
+
+import shaders from "@/shaders/compute/deform_perlin.wgsl";
 import type { WebGPUContext } from "./webgpu";
 import { makeShaderDataDefinitions, makeStructuredView } from "webgpu-utils";
 
